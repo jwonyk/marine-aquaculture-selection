@@ -8,10 +8,15 @@ execute:
   echo: true
   warning: false
   message: false
+editor_options: 
+  chunk_output_type: inline
 ---
 
-## Set up
+## Introduction
 
+The growth of marine aquaculture has increased the need for spatial analyses that help identify where different species are most likely to thrive. For shellfish farmers, selecting suitable offshore locations is crucial, which entails determining the proper environmental conditions, such as temperature and depth, that strongly influence survival, growth, overall yield potential, and understanding how to support more sustainable development.
+
+## Set up
 We are going to clear the environment and load necessary packages.
 
 ```{r}
@@ -28,7 +33,6 @@ pacman::p_load(tidyverse, sf, here,
 ```
 
 ## Data Preparation
-
 Reading in SST and depth rasters, then check coordinate reference systems (CRS) so that spatial layers align correctly for later operations.
 
 ```{r}
@@ -80,7 +84,6 @@ if(!crs(depth_rast) == crs(sst_rast)) {
 }
 ```
 ## Compute Mean SST and Convert to Celsius
-
 Because SST data span multiple years, we average the rasters to obtain a mean temperature surface, which is then converted from Kelvin to Celsius.
 
 ```{r}
@@ -99,7 +102,6 @@ names(sst_mean_celsius) <- "sst_mean_celsius"
 ```
 
 ## Align Depth Raster to SST Raster
-
 The depth raster must match the SST raster’s resolution and extent to ensure accurate cell-by-cell comparison during suitability calculations.
 
 ```{r}
@@ -111,7 +113,9 @@ The depth raster must match the SST raster’s resolution and extent to ensure a
 depth_crop <- crop(depth_rast, sst_mean_celsius)
 
 # Resample to match SST resolution (use the nearest neighbor)
-depth_resample <- resample(depth_crop, sst_mean_celsius, method = "near")
+depth_resample <- resample(depth_crop, 
+                           sst_mean_celsius, 
+                           method = "near")
 
 # Rename the column to make sure no confusion later
 names(depth_resample) <- "depth_resample"
@@ -122,7 +126,6 @@ compareGeom(sst_mean_celsius, depth_resample)
 ```
 
 ## Reclassifying & Combine for Suitability
-
 We convert continuous SST values into a binary suitability layer based on oyster temperature thresholds from the literature. Similarly, depth values are reclassified to identify areas within the allowable depth range for oyster growth. Multiplying the two binary layers identifies grid cells that meet both environmental requirements.
 
 ```{r}
@@ -153,7 +156,6 @@ oyster_cells_suitable <- oyster_sst_suitable * oyster_depth_suitable
 ```
 
 ## Crop and Mask Suitability to EEZ Boundaries
-
 We restrict the area of interest to U.S. West Coast Exclusive Economic Zones (EEZs), ensuring suitability is evaluated only within jurisdictional waters.
 
 ```{r}
@@ -172,7 +174,6 @@ oyster_eez <- mask(oyster_crop, eez_vector)
 ```
 
 ## Compute Suitable Cells to Area
-
 Each raster cell’s area is computed and summed within each EEZ to quantify total suitable habitat in square kilometers.
 
 ```{r}
@@ -191,7 +192,6 @@ names(oyster_area) <- "suitable_area_km2"
 ```
 
 ## Join Suitability Results to EEZ Polygons
-
 We join calculated suitable area values back to EEZ polygons so they can be visualized on a choropleth map.
 
 ```{r}
@@ -210,7 +210,8 @@ eez_vector <- vect(eez)
 eez_id_raster <- rasterize(eez_vector, oyster_area, field = "eez_id")
 ```
 
-
+## Calculate and Summarize Suitable Area by EEZ
+We sum all suitable raster cells within each EEZ and join these results to the EEZ polygons.
 
 ```{r}
 #| label: zonal-area
@@ -231,13 +232,15 @@ eez_oyster_join <- eez %>%
 eez_oyster_join %>% 
   st_drop_geometry() %>% 
   arrange(desc(suitable_area_km2)) %>% 
-  kable("html", caption = "Suitable Oyster Habitat Area by EEZ (km^2)") %>% 
-  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+  kable("html", 
+        caption = "Suitable Oyster Habitat Area by EEZ (km^2)",
+        align = "c") %>% 
+  kable_styling(full_width = FALSE, 
+                bootstrap_options = c("striped", "hover"))
   
 ```
 
 ## Map Oyster Aquaculture Suitability
-
 A map is generated showing the relative availability of suitable habitat across EEZs, providing spatial insights for marine planning.
 
 ```{r}
@@ -253,6 +256,7 @@ teal_palette <- as.character(paletteer_d("ggsci::teal_material"))
 eez_map <- eez_oyster_join[!is.na(eez_oyster_join$suitable_area_km2), ]
 
 # Map suitable area by EEZ
+tm_tiles("Esri.OceanBasemap") +
 tm_shape(eez_map) + 
   tm_polygons(
     col = "suitable_area_km2",
@@ -326,17 +330,19 @@ eez_join <- eez %>%
 # 8. Map
 teal_palette <- as.character(paletteer_d("ggsci::teal_material"))
 
-map <- tm_shape(eez_join) +
-  tm_polygons(col = "suitable_area_km2",
-              palette = colorRampPalette(teal_palette)(20),
-              title = "Suitable Area (km²)") +
-  tm_layout(main.title = paste("Aquaculture Suitability for", species_name),
-            main.title.size = 1.0,
-            legend.outside = TRUE,
-            frame = FALSE) +
-  tm_compass(position = c("right", "top")) +
-  tm_scalebar(breaks = c(0, 100, 200, 300),
-              position = c("left", "bottom"))
+map <- tm_tiles("Esri.OceanBasemap") +
+  tm_shape(eez_join) +
+    tm_polygons(col = "suitable_area_km2",
+                palette = colorRampPalette(teal_palette)(20),
+                title = "Suitable Area (km²)") +
+    tm_layout(main.title = paste("Aquaculture Suitability for",
+                                 species_name),
+              main.title.size = 1.0,
+              legend.outside = TRUE,
+              frame = FALSE) +
+    tm_compass(position = c("right", "top")) +
+    tm_scalebar(breaks = c(0, 100, 200, 300),
+                position = c("left", "bottom"))
 return(map)}
 ```
 
@@ -362,7 +368,19 @@ mussle_map
 
 ## Reflection - Mussel Aquaculture Suitability
 
-The mussel suitability assessment shows different spatial patterns compare to oysters, emphasizing how species-specific environmental requirements could lead to different aquaculture potential across EEZs. Mussels favor cooler temperature and shallow depths and shows that more suitable northward than southern regions.
+The mussel suitability assessment shows different spatial patterns compare to oysters, emphasizing how species-specific environmental requirements could lead to different aquaculture potential across EEZs. Mussels favor cooler temperature and shallow depths and shows that more suitable northward than southern regions - sustainability is highest in Northern California and Washington.
+
+## Conclusion
+
+This analysis demonstrates how we use spatial data science to evaluate the sustainability of aquaculture across large marine regions. By combining sea surface temperature data, bathymetry, raster reclassification, and Zonal statistics, we can identify locations that hit all the requirements for the environmental conditions specific to the aquaculture species. The results show that oysters prefer the warm southern waters, whereas mussels are better suited to the cooler northern regions of EEZs. The findings could improve productivity and reduce ecological risks.
+
+## Future Directions
+
+These are the limitations that we need to include in our future analysis:
+
+**Environmental variables**: Suitability should depend on more than sea surface temperature and depth. We may need information such as 
+
+**Socioeconomic Aspects**: Not all environmentally suitable areas are socially, economically, and legally feasible for farmers.
 
 ## README
 
