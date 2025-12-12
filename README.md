@@ -7,7 +7,7 @@ This project evaluates the potential for marine aquaculture development within E
 ## Repository Structure
 
 ``` bash
-Marine-Aquaculture-Selection
+marine-aquaculture-selection
 └─── README.md
 └─── Marine-Aquaculture-Selection.Rproj
 └─── Marine-Aquaculture-Selection.qmd
